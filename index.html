@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solana Tracker Pro</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <link rel="apple-touch-icon" href="icon.png">
+</head>
+<body>
+    <header>
+        <h1>🟢 Solana Early Tracker</h1>
+        <button id="refreshBtn">Refresh Data</button>
+    </header>
+    <main>
+        <div id="coinList">Memuat data koin potensial...</div>
+    </main>
+    <script src="app.js"></script>
+    <script>
+      // Mendaftarkan Service Worker agar bisa diinstal di HP
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js');
+      }
+    </script>
+</body>
+</html>
