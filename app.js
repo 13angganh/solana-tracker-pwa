@@ -2,60 +2,67 @@ const coinList = document.getElementById('coinList');
 const refreshBtn = document.getElementById('refreshBtn');
 
 async function fetchNewCoins() {
-    coinList.innerHTML = '<div style="text-align:center; padding:50px; color: #14f195;">🔍 Memindai Blockchain Solana...</div>';
-    
+    coinList.innerHTML = '<div style="text-align:center; padding:50px;">Memindai Token Terpanas...</div>';
     try {
-        // Menggunakan endpoint "latest profiles" agar dapat koin yang benar-benar baru
-        const response = await fetch('https://api.dexscreener.com/token-profiles/latest/v1');
+        // Kita ambil data pair terbaru di Solana
+        const response = await fetch('https://api.dexscreener.com/latest/dex/tokens/solana');
         const data = await response.json();
         
-        // Kita hanya ambil koin yang dari chain Solana
-        const solanaCoins = data.filter(coin => coin.chainId === 'solana');
-        
-        displayCoins(solanaCoins);
+        if (data.pairs) {
+            // Urutkan berdasarkan perubahan harga 1 jam terakhir (tertinggi di atas)
+            const sorted = data.pairs.sort((a, b) => b.priceChange.h1 - a.priceChange.h1);
+            displayCoins(sorted);
+        }
     } catch (error) {
-        console.error(error);
-        coinList.innerHTML = '<div style="text-align:center; color:red;">Gagal mengambil data. Coba lagi dalam 5 detik.</div>';
+        coinList.innerHTML = 'Gagal memuat data.';
     }
 }
 
-function displayCoins(coins) {
-    coinList.innerHTML = '';
-    
-    if (!coins || coins.length === 0) {
-        coinList.innerHTML = '<div style="text-align:center; padding:20px;">Tidak ada koin baru ditemukan saat ini.</div>';
-        return;
-    }
+function displayCoins(pairs) {
+    coinList.innerHTML = '<div class="grid" id="grid"></div>';
+    const grid = document.getElementById('grid');
 
-    coins.forEach(coin => {
+    pairs.slice(0, 20).forEach(pair => {
+        const h1Change = pair.priceChange.h1 || 0;
+        const isTrending = h1Change > 20; // Indikator: Naik > 20% dalam sejam
+
         const card = document.createElement('div');
-        card.className = 'card';
+        card.className = `card ${isTrending ? 'trending' : ''}`;
         
         card.innerHTML = `
-            <div class="badge">NEW TOKEN</div>
-            <h3>${coin.symbol || 'Unknown'}</h3>
-            <div class="info-row">
-                <span class="label">Description</span>
-                <span style="font-size: 0.8rem; text-align: right; max-width: 60%;">${coin.description ? coin.description.substring(0, 50) + '...' : 'No desc'}</span>
+            ${isTrending ? '<span class="badge-trend">🔥 MOONING</span>' : '<span class="badge-trend" style="background:#444">STABLE</span>'}
+            <p style="font-size: 0.7rem; color: #888; margin: 0;">${pair.baseToken.symbol} / SOL</p>
+            <h3 class="name">${pair.baseToken.name}</h3>
+            <div class="price">$${parseFloat(pair.priceUsd).toFixed(8)}</div>
+            
+            <div style="font-size: 0.9rem; color: ${h1Change >= 0 ? 'var(--sol-green)' : 'var(--danger)'}">
+                1h Change: ${h1Change}%
             </div>
-            <div class="ca-box">${coin.tokenAddress}</div>
-            <div style="display: flex; gap: 10px; margin-top: 10px;">
-                <a href="${coin.url}" target="_blank" style="flex: 1; text-decoration:none;">
-                    <button style="width:100%; background:white; color:black; padding: 8px;">Chart</button>
-                </a>
-                ${coin.links && coin.links[0] ? `<a href="${coin.links[0].url}" target="_blank" style="flex: 1; text-decoration:none;">
-                    <button style="width:100%; background:#9945FF; color:white; padding: 8px;">Socials</button>
-                </a>` : ''}
+
+            <div class="ca-box" style="background:#222; padding:5px; font-size:0.7rem; margin-top:10px; word-break:break-all; border-radius:5px;">
+                ${pair.baseToken.address}
+            </div>
+
+            <div class="stats">
+                <span>Liq: $${Math.round(pair.liquidity?.usd || 0).toLocaleString()}</span>
+                <span>Vol: $${Math.round(pair.volume?.h24 || 0).toLocaleString()}</span>
+            </div>
+
+            <div style="display:flex; justify-content: space-between;">
+                <button class="btn-action" onclick="window.open('${pair.url}', '_blank')">Chart</button>
+                <button class="btn-action" onclick="navigator.clipboard.writeText('${pair.baseToken.address}'); alert('CA Copied!')">Copy CA</button>
             </div>
         `;
-        coinList.appendChild(card);
+        grid.appendChild(card);
     });
 }
 
+// Auto Refresh tiap 30 detik
+setInterval(fetchNewCoins, 30000);
 refreshBtn.addEventListener('click', fetchNewCoins);
 fetchNewCoins();
 
-// Logika Instal PWA tetap di bawah sini
+// Logika Instal PWA
 let deferredPrompt;
 window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
@@ -69,20 +76,4 @@ document.getElementById('installBtn').addEventListener('click', async () => {
         deferredPrompt = null;
         document.getElementById('installBtn').style.display = 'none';
     }
-});
-// --- FITUR AUTO-REFRESH OTOMATIS ---
-
-// Buat timer yang menjalankan fungsi fetchNewCoins setiap 30.000 milidetik (30 detik)
-setInterval(() => {
-    console.log("Auto-refreshing data...");
-    fetchNewCoins();
-}, 30000); 
-
-// Opsional: Tambahkan indikator visual di tombol agar kamu tahu kapan dia refresh
-refreshBtn.addEventListener('click', () => {
-    // Memberi efek loading sederhana saat diklik manual
-    refreshBtn.innerText = "🔄 Memindai...";
-    setTimeout(() => {
-        refreshBtn.innerText = "Refresh Data";
-    }, 2000);
 });
