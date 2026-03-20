@@ -60,3 +60,35 @@ function displayCoins(pairs) {
 
 refreshBtn.addEventListener('click', fetchNewCoins);
 fetchNewCoins();
+// --- LOGIKA INSTAL PWA ---
+let deferredPrompt;
+const installBtn = document.getElementById('installBtn');
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    // Mencegah browser memunculkan prompt otomatis
+    e.preventDefault();
+    // Simpan event agar bisa dipicu nanti
+    deferredPrompt = e;
+    // Munculkan tombol instal buatan kita
+    installBtn.style.display = 'block';
+});
+
+installBtn.addEventListener('click', async () => {
+    if (deferredPrompt) {
+        // Tampilkan prompt instalasi
+        deferredPrompt.prompt();
+        // Tunggu jawaban user
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log(`User response to the install prompt: ${outcome}`);
+        // Sembunyikan tombol lagi karena sudah diinstal
+        deferredPrompt = null;
+        installBtn.style.display = 'none';
+    }
+});
+
+// Sembunyikan tombol jika aplikasi sudah terinstal
+window.addEventListener('appinstalled', () => {
+    installBtn.style.display = 'none';
+    deferredPrompt = null;
+    console.log('PWA sukses terinstal');
+});
