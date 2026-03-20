@@ -3,7 +3,7 @@ const coinList = document.getElementById('coinList');
 const refreshBtn = document.getElementById('refreshBtn');
 
 async function fetchNewCoins() {
-    coinList.innerHTML = '<div style="text-align:center; padding:50px; color:#14f195;">🔍 Mengekstrak Nama Asli...</div>';
+    coinList.innerHTML = '<div style="text-align:center; padding:50px; color:#14f195;">🔍 Mencari Nama Koin Asli...</div>';
     try {
         const response = await fetch('https://api.dexscreener.com/token-profiles/latest/v1');
         const data = await response.json();
@@ -26,13 +26,12 @@ function displayCoins(items) {
         const ca = item.tokenAddress || "";
         const icon = item.icon || "";
         
-        // --- PERBAIKAN LOGIKA NAMA: Ambil bagian terakhir URL yang BUKAN CA ---
-        let urlParts = item.url.split('/');
-        let nameFromUrl = urlParts[urlParts.length - 1]; 
+        // --- LOGIKA NAMA SUPER AGRESIF ---
+        // 1. Cek .symbol | 2. Cek bagian terakhir URL | 3. Cek .description
+        let rawName = item.symbol || item.url.split('/').pop() || "NEW GEM";
         
-        // Jika nama dari URL masih berupa CA (panjang), kita ambil simbol atau deskripsi singkat
-        let finalName = item.symbol || nameFromUrl;
-        if (finalName.length > 20) finalName = "NEW GEM";
+        // Jika rawName masih berupa alamat CA (panjang banget), kita bersihkan
+        let finalName = rawName.length > 30 ? "NEW TOKEN" : rawName.replace(/-/g, ' ');
 
         const xLink = item.links?.find(l => l.type === 'twitter')?.url || "";
         const tgLink = item.links?.find(l => l.type === 'telegram')?.url || "";
@@ -54,13 +53,13 @@ function displayCoins(items) {
                 ${ca}
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                <button class="btn-action" style="background:#00f2ff; color:black; font-weight:bold; padding:10px; border:none; border-radius:5px;" onclick="window.open('https://gmgn.ai/sol/token/${ca}', '_blank')">📱 GMGN</button>
-                <button class="btn-action" style="background:#ff9900; color:black; font-weight:bold; padding:10px; border:none; border-radius:5px;" onclick="window.open('https://jup.ag/swap/SOL-${ca}', '_blank')">🪐 Jup</button>
-                <button class="btn-action" style="background:#444; color:white; font-weight:bold; padding:10px; border:none; border-radius:5px;" onclick="window.open('https://rugcheck.xyz/tokens/${ca}', '_blank')">🛡️ Rug</button>
-                <button class="btn-action" style="background:#222; color:white; font-weight:bold; padding:10px; border:none; border-radius:5px;" onclick="window.open('${item.url}', '_blank')">📈 Chart</button>
+                <button class="btn-action" style="background:#00f2ff; color:black; font-weight:bold; padding:10px; border:none; border-radius:5px; cursor:pointer;" onclick="window.open('https://gmgn.ai/sol/token/${ca}', '_blank')">📱 GMGN</button>
+                <button class="btn-action" style="background:#ff9900; color:black; font-weight:bold; padding:10px; border:none; border-radius:5px; cursor:pointer;" onclick="window.open('https://jup.ag/swap/SOL-${ca}', '_blank')">🪐 Jup</button>
+                <button class="btn-action" style="background:#444; color:white; font-weight:bold; padding:10px; border:none; border-radius:5px; cursor:pointer;" onclick="window.open('https://rugcheck.xyz/tokens/${ca}', '_blank')">🛡️ Rug</button>
+                <button class="btn-action" style="background:#222; color:white; font-weight:bold; padding:10px; border:none; border-radius:5px; cursor:pointer;" onclick="window.open('${item.url}', '_blank')">📈 Chart</button>
             </div>
             <div style="display:flex; gap:20px; margin-top:15px; justify-content:center; border-top:1px solid #222; padding-top:12px;">
-                ${xLink ? `<a href="${xLink}" target="_blank" style="color:#1da1f2; text-decoration:none; font-size:0.9rem;">X</a>` : ''}
+                ${xLink ? `<a href="${xLink}" target="_blank" style="color:#1da1f2; text-decoration:none; font-size:0.9rem;">Twitter</a>` : ''}
                 ${tgLink ? `<a href="${tgLink}" target="_blank" style="color:#0088cc; text-decoration:none; font-size:0.9rem;">TG</a>` : ''}
             </div>
         `;
@@ -78,9 +77,9 @@ async function fetchSecurity(mint) {
             body: JSON.stringify({ mintAccounts: [mint] }),
         });
         const data = await response.json();
-        const d = data[0]?.onChainData || {};
-        const isMint = d.mintAuthority === null;
-        const isFreeze = d.freezeAuthority === null;
+        const d = data[0] || {};
+        const isMint = d.onChainData?.mintAuthority === null;
+        const isFreeze = d.onChainData?.freezeAuthority === null;
         secDiv.innerHTML = `
             <div style="display:flex; justify-content:space-between;">
                 <span style="color:${isMint ? '#14f195' : 'orange'}">${isMint ? '✅ Mint Off' : '⚠️ Mint On'}</span>
