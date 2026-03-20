@@ -1,45 +1,36 @@
 // ================================================================
 // SERVICE WORKER — Zero-config auto-update
-// Tidak perlu ubah versi manual. Cukup deploy file baru.
 //
-// CARA KERJANYA:
-// 1. Browser auto-cek sw.js setiap halaman dibuka & setiap 24 jam
-// 2. Jika sw.js berubah (byte apapun berbeda) → SW baru di-install
-// 3. skipWaiting() → SW baru langsung aktif, tidak nunggu tab tutup
-// 4. clients.claim() → semua tab langsung pakai SW baru
-// 5. Saat aktivasi → hapus SEMUA cache lama otomatis
-// 6. Network-first → selalu ambil file terbaru dari server
+// KENAPA VERSI SEBELUMNYA GAGAL:
+// cache.addAll() di install event men-cache file LAMA dulu,
+// lalu SW baru aktif tapi tetap serve dari cache lama itu.
 //
-// HASIL: Deploy file → user dapat versi baru otomatis, tanpa apapun
+// FIX:
+// - Tidak ada pre-cache di install (tidak ada cache.addAll)
+// - Cache terisi organik saat fetch — selalu dari network dulu
+// - CACHE_NAME pakai timestamp SW ini dibuat → cache lama
+//   pasti berbeda nama → pasti dihapus saat aktivasi
+// - skipWaiting langsung → tidak tunggu tab ditutup
+// - clients.claim langsung → semua tab pakai SW baru
+//
+// HASIL: Deploy file → SW baru install → cache lama terhapus
+// → semua request ambil dari network → user dapat versi terbaru
 // ================================================================
 
-const CACHE_NAME = 'solana-tracker-cache';
-
-// File yang di-pre-cache untuk offline fallback
-const PRECACHE_ASSETS = [
-    '/',
-    '/index.html',
-    '/style.css',
-    '/app.js',
-    '/manifest.json',
-    '/icon.png'
-];
+// Timestamp ini berubah setiap kali sw.js di-deploy ulang
+// Browser deteksi perubahan byte → install SW baru otomatis
+const CACHE_NAME = 'sol-tracker-' + '2025-03-20T15:00:00';
 
 // ----------------------------------------------------------------
-// INSTALL — Pre-cache assets, lalu skipWaiting langsung
-// skipWaiting = tidak tunggu tab ditutup, SW baru langsung aktif
+// INSTALL — skipWaiting langsung, TANPA pre-cache
+// Pre-cache dihilangkan karena justru mengunci versi lama di cache
 // ----------------------------------------------------------------
 self.addEventListener('install', (event) => {
-    event.waitUntil(
-        caches.open(CACHE_NAME)
-            .then(cache => cache.addAll(PRECACHE_ASSETS))
-            .then(() => self.skipWaiting())   // <-- kunci auto-update
-    );
+    event.waitUntil(self.skipWaiting());
 });
 
 // ----------------------------------------------------------------
-// ACTIVATE — Hapus cache lama, ambil kontrol semua tab
-// clients.claim = langsung berlaku tanpa perlu reload manual
+// ACTIVATE — Hapus SEMUA cache lama, lalu claim semua tab
 // ----------------------------------------------------------------
 self.addEventListener('activate', (event) => {
     event.waitUntil(
@@ -47,33 +38,38 @@ self.addEventListener('activate', (event) => {
             .then(keys => Promise.all(
                 keys
                     .filter(key => key !== CACHE_NAME)
-                    .map(key => caches.delete(key))   // hapus cache lama
+                    .map(key => caches.delete(key))
             ))
-            .then(() => self.clients.claim())          // <-- kontrol semua tab
+            .then(() => self.clients.claim())
     );
 });
 
 // ----------------------------------------------------------------
-// FETCH — Network-first untuk semua request ke origin sendiri
-// Ambil dari network dulu (selalu dapat versi terbaru),
-// simpan ke cache sebagai fallback offline.
-// Request ke API eksternal (DexScreener, Helius) tidak di-cache.
+// FETCH — Network-first untuk semua asset lokal
+//
+// Setiap request ke origin sendiri:
+// 1. Ambil dari network (versi terbaru)
+// 2. Simpan ke cache sebagai fallback offline
+// 3. Jika network gagal (offline) → fallback ke cache
+//
+// API eksternal (DexScreener, Helius) → bypass SW sepenuhnya
 // ----------------------------------------------------------------
 self.addEventListener('fetch', (event) => {
-    // Hanya handle GET
     if (event.request.method !== 'GET') return;
 
     const url = new URL(event.request.url);
 
-    // Skip request ke API eksternal — jangan di-cache
-    const isExternal = url.origin !== self.location.origin;
-    if (isExternal) return;
+    // Bypass: request ke domain lain (API eksternal)
+    if (url.origin !== self.location.origin) return;
+
+    // Bypass: chrome-extension atau non-http
+    if (!url.protocol.startsWith('http')) return;
 
     event.respondWith(
-        fetch(event.request)
+        fetch(event.request, { cache: 'no-store' })
             .then(response => {
-                // Hanya cache response yang valid (bukan 404/500)
-                if (response.ok) {
+                // Cache hanya response valid
+                if (response.ok && response.status === 200) {
                     const clone = response.clone();
                     caches.open(CACHE_NAME)
                         .then(cache => cache.put(event.request, clone));
@@ -81,7 +77,7 @@ self.addEventListener('fetch', (event) => {
                 return response;
             })
             .catch(() => {
-                // Offline: coba dari cache
+                // Offline fallback: coba cache
                 return caches.match(event.request)
                     .then(cached => cached || caches.match('/index.html'));
             })
@@ -89,8 +85,7 @@ self.addEventListener('fetch', (event) => {
 });
 
 // ----------------------------------------------------------------
-// MESSAGE — Opsional: terima sinyal force-update dari halaman
-// (tidak wajib karena skipWaiting sudah otomatis di install)
+// MESSAGE — Force update dari halaman (tombol "Update Sekarang")
 // ----------------------------------------------------------------
 self.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'SKIP_WAITING') {
