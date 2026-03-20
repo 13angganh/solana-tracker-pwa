@@ -3,7 +3,7 @@ const coinList = document.getElementById('coinList');
 const refreshBtn = document.getElementById('refreshBtn');
 
 async function fetchNewCoins() {
-    coinList.innerHTML = '<div style="text-align:center; padding:50px; color:#14f195;">🔍 Memuat Nama & Koin Asli...</div>';
+    coinList.innerHTML = '<div style="text-align:center; padding:50px; color:#14f195;">🔍 Membedah Nama Koin Solana...</div>';
     
     try {
         const response = await fetch('https://api.dexscreener.com/token-profiles/latest/v1');
@@ -13,10 +13,10 @@ async function fetchNewCoins() {
         if (solanaGems && solanaGems.length > 0) {
             displayCoins(solanaGems);
         } else {
-            coinList.innerHTML = '<div style="text-align:center; padding:20px;">Belum ada koin baru. Tunggu sebentar...</div>';
+            coinList.innerHTML = '<div style="text-align:center; padding:20px;">Data kosong, coba 10 detik lagi.</div>';
         }
     } catch (error) {
-        coinList.innerHTML = '<div style="text-align:center; color:red;">Koneksi Gagal. Coba Refresh.</div>';
+        coinList.innerHTML = '<div style="text-align:center; color:red;">Koneksi Error.</div>';
     }
 }
 
@@ -25,25 +25,32 @@ function displayCoins(items) {
     const grid = document.getElementById('grid');
 
     items.slice(0, 15).forEach(item => {
-        // LOGIKA PENYELAMAT NAMA: Cek semua kemungkinan lokasi nama/simbol
+        // DETEKSI NAMA SUPER KETAT
         const ca = item.tokenAddress || "";
-        const symbol = item.symbol || item.tokenAddress.substring(0, 5); 
         const icon = item.icon || "";
         const xLink = item.links?.find(l => l.type === 'twitter')?.url || "";
         const tgLink = item.links?.find(l => l.type === 'telegram')?.url || "";
+        
+        // Cek satu per satu: symbol utama, atau dari deskripsi, atau dari header
+        let displayName = "NEW COIN";
+        if (item.symbol) {
+            displayName = item.symbol;
+        } else if (item.header) {
+            displayName = "PROJ-" + ca.substring(0, 4);
+        }
 
         const card = document.createElement('div');
         card.className = 'card';
         
         card.innerHTML = `
-            <div class="badge-trend" style="background:#9945FF">NEW GEMS</div>
+            <div class="badge-trend" style="background:#9945FF">SOLANA GEMS</div>
             <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
-                ${icon ? `<img src="${icon}" style="width:35px; height:35px; border-radius:50%; border:1px solid #333;">` : '<div style="width:35px; height:35px; background:#333; border-radius:50%;"></div>'}
-                <h3 class="name" style="margin:0; color:white; font-size:1.2rem;">${symbol}</h3>
+                ${icon ? `<img src="${icon}" style="width:40px; height:40px; border-radius:50%; border:2px solid #14f195;">` : '<div style="width:40px; height:40px; background:#333; border-radius:50%;"></div>'}
+                <h3 class="name" style="margin:0; color:white; font-size:1.3rem;">${displayName}</h3>
             </div>
             
             <div id="sec-${ca}" style="margin-top:10px; padding:8px; background:#1a1a1a; border-radius:8px; font-size:0.75rem; color:#aaa; border:1px solid #222;">
-                🛡️ Mengecek Keamanan...
+                🛡️ Security: Scanning...
             </div>
 
             <div class="ca-box" onclick="navigator.clipboard.writeText('${ca}'); alert('CA Copied!')" style="background:#050505; padding:10px; border-radius:6px; font-size:0.7rem; margin:10px 0; word-break:break-all; border:1px dashed #444; color:#14f195; cursor:pointer; text-align:center;">
@@ -77,17 +84,17 @@ async function fetchSecurity(mint) {
         });
         const data = await response.json();
         const d = data[0] || {};
-        const isMint = d.onChainData?.mintAuthority;
-        const isFreeze = d.onChainData?.freezeAuthority;
+        // Perbaikan logika Helius (Mint/Freeze)
+        const isMint = d.onChainData?.mintAuthority === null;
+        const isFreeze = d.onChainData?.freezeAuthority === null;
 
         secDiv.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span>Mint: ${isMint ? '⚠️ No' : '✅ Yes'}</span>
-                <span>Freeze: ${isFreeze ? '⚠️ No' : '✅ Yes'}</span>
-                <span style="color:#14f195; font-weight:bold;">OK</span>
+                <span style="color:${isMint ? '#14f195' : 'orange'}">${isMint ? '✅ Mint Off' : '⚠️ Mint On'}</span>
+                <span style="color:${isFreeze ? '#14f195' : 'orange'}">${isFreeze ? '✅ Freeze Off' : '⚠️ Freeze On'}</span>
             </div>
         `;
-    } catch (e) { secDiv.innerHTML = "Security: N/A (Helius Limit)"; }
+    } catch (e) { secDiv.innerHTML = "Security: Check RugCheck"; }
 }
 
 fetchNewCoins();
