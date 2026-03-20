@@ -2,57 +2,51 @@ const coinList = document.getElementById('coinList');
 const refreshBtn = document.getElementById('refreshBtn');
 
 async function fetchNewCoins() {
-    coinList.innerHTML = '<div style="text-align:center; padding:50px;">Memindai Solana Blockchain...</div>';
+    coinList.innerHTML = '<div style="text-align:center; padding:50px; color: #14f195;">🔍 Memindai Blockchain Solana...</div>';
+    
     try {
-        const response = await fetch('https://api.dexscreener.com/latest/dex/tokens/solana');
+        // Menggunakan endpoint "latest profiles" agar dapat koin yang benar-benar baru
+        const response = await fetch('https://api.dexscreener.com/token-profiles/latest/v1');
         const data = await response.json();
-        displayCoins(data.pairs);
+        
+        // Kita hanya ambil koin yang dari chain Solana
+        const solanaCoins = data.filter(coin => coin.chainId === 'solana');
+        
+        displayCoins(solanaCoins);
     } catch (error) {
-        coinList.innerHTML = 'Koneksi API Gagal.';
+        console.error(error);
+        coinList.innerHTML = '<div style="text-align:center; color:red;">Gagal mengambil data. Coba lagi dalam 5 detik.</div>';
     }
 }
 
-function displayCoins(pairs) {
+function displayCoins(coins) {
     coinList.innerHTML = '';
-    if (!pairs) return;
+    
+    if (!coins || coins.length === 0) {
+        coinList.innerHTML = '<div style="text-align:center; padding:20px;">Tidak ada koin baru ditemukan saat ini.</div>';
+        return;
+    }
 
-    // Filter: Liquidity > $10,000 (Lebih ketat) & Volume 24h > $50,000
-    const filtered = pairs.filter(p => 
-        p.liquidity && p.liquidity.usd > 10000 && 
-        p.volume && p.volume.h24 > 50000
-    );
-
-    filtered.slice(0, 20).forEach(pair => {
+    coins.forEach(coin => {
         const card = document.createElement('div');
         card.className = 'card';
         
-        // Logika sederhana mendeteksi "Trending"
-        const isTrending = pair.priceChange.h1 > 10 ? '🔥 TRENDING' : '💎 STABLE';
-
         card.innerHTML = `
-            <div class="badge">${isTrending}</div>
-            <h3>${pair.baseToken.name} / ${pair.quoteToken.symbol}</h3>
-            
+            <div class="badge">NEW TOKEN</div>
+            <h3>${coin.symbol || 'Unknown'}</h3>
             <div class="info-row">
-                <span class="label">Price</span>
-                <span>$${pair.priceUsd}</span>
+                <span class="label">Description</span>
+                <span style="font-size: 0.8rem; text-align: right; max-width: 60%;">${coin.description ? coin.description.substring(0, 50) + '...' : 'No desc'}</span>
             </div>
-            
-            <div class="info-row">
-                <span class="label">Liquidity</span>
-                <span>$${pair.liquidity.usd.toLocaleString()}</span>
+            <div class="ca-box">${coin.tokenAddress}</div>
+            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                <a href="${coin.url}" target="_blank" style="flex: 1; text-decoration:none;">
+                    <button style="width:100%; background:white; color:black; padding: 8px;">Chart</button>
+                </a>
+                ${coin.links && coin.links[0] ? `<a href="${coin.links[0].url}" target="_blank" style="flex: 1; text-decoration:none;">
+                    <button style="width:100%; background:#9945FF; color:white; padding: 8px;">Socials</button>
+                </a>` : ''}
             </div>
-
-            <div class="info-row">
-                <span class="label">Volume 24h</span>
-                <span>$${pair.volume.h24.toLocaleString()}</span>
-            </div>
-
-            <div class="ca-box">${pair.baseToken.address}</div>
-
-            <a href="${pair.url}" target="_blank" style="text-decoration:none;">
-                <button style="width:100%; margin-top:10px; background:white;">Open Chart</button>
-            </a>
         `;
         coinList.appendChild(card);
     });
@@ -60,35 +54,19 @@ function displayCoins(pairs) {
 
 refreshBtn.addEventListener('click', fetchNewCoins);
 fetchNewCoins();
-// --- LOGIKA INSTAL PWA ---
+
+// Logika Instal PWA tetap di bawah sini
 let deferredPrompt;
-const installBtn = document.getElementById('installBtn');
-
 window.addEventListener('beforeinstallprompt', (e) => {
-    // Mencegah browser memunculkan prompt otomatis
     e.preventDefault();
-    // Simpan event agar bisa dipicu nanti
     deferredPrompt = e;
-    // Munculkan tombol instal buatan kita
-    installBtn.style.display = 'block';
+    document.getElementById('installBtn').style.display = 'block';
 });
 
-installBtn.addEventListener('click', async () => {
+document.getElementById('installBtn').addEventListener('click', async () => {
     if (deferredPrompt) {
-        // Tampilkan prompt instalasi
         deferredPrompt.prompt();
-        // Tunggu jawaban user
-        const { outcome } = await deferredPrompt.userChoice;
-        console.log(`User response to the install prompt: ${outcome}`);
-        // Sembunyikan tombol lagi karena sudah diinstal
         deferredPrompt = null;
-        installBtn.style.display = 'none';
+        document.getElementById('installBtn').style.display = 'none';
     }
-});
-
-// Sembunyikan tombol jika aplikasi sudah terinstal
-window.addEventListener('appinstalled', () => {
-    installBtn.style.display = 'none';
-    deferredPrompt = null;
-    console.log('PWA sukses terinstal');
 });
