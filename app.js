@@ -23,44 +23,49 @@ function displayCoins(pairs) {
     const grid = document.getElementById('grid');
 
     pairs.slice(0, 20).forEach(pair => {
-        const h1Change = pair.priceChange.h1 || 0;
-        const isTrending = h1Change > 20; // Indikator: Naik > 20% dalam sejam
+        const liq = pair.liquidity?.usd || 0;
+        const vol = pair.volume?.h24 || 0;
+        const vlRatio = liq > 0 ? (vol / liq).toFixed(2) : 0;
+        
+        // INDIKATOR KEAMANAN DASAR
+        // 1. V/L Ratio terlalu tinggi (>50) biasanya indikator volume palsu/wash trade
+        const isSuspicious = vlRatio > 50; 
+        // 2. Liquidity terlalu kecil (< $5000) sangat rawan rugpull
+        const isLowLiq = liq < 5000;
 
         const card = document.createElement('div');
-        card.className = `card ${isTrending ? 'trending' : ''}`;
+        card.className = `card ${vlRatio > 5 ? 'trending' : ''}`;
         
         card.innerHTML = `
-            ${isTrending ? '<span class="badge-trend">🔥 MOONING</span>' : '<span class="badge-trend" style="background:#444">STABLE</span>'}
+            <div class="badge-trend" style="background: ${isSuspicious ? 'red' : 'var(--sol-purple)'}">
+                ${isSuspicious ? '⚠️ HIGH RISK' : '📊 V/L: ' + vlRatio}
+            </div>
+            
             <p style="font-size: 0.7rem; color: #888; margin: 0;">${pair.baseToken.symbol} / SOL</p>
             <h3 class="name">${pair.baseToken.name}</h3>
+            
             <div class="price">$${parseFloat(pair.priceUsd).toFixed(8)}</div>
             
-            <div style="font-size: 0.9rem; color: ${h1Change >= 0 ? 'var(--sol-green)' : 'var(--danger)'}">
-                1h Change: ${h1Change}%
+            <div style="font-size: 0.8rem; margin-bottom: 10px;">
+                <span style="color: ${isLowLiq ? 'red' : '#aaa'}">
+                    Liq: $${Math.round(liq).toLocaleString()} ${isLowLiq ? '(Too Low!)' : ''}
+                </span>
             </div>
 
-            <div class="ca-box" style="background:#222; padding:5px; font-size:0.7rem; margin-top:10px; word-break:break-all; border-radius:5px;">
+            <div class="ca-box" style="background:#1a1a1a; color: #14f195;">
                 ${pair.baseToken.address}
             </div>
 
-            <div class="stats">
-                <span>Liq: $${Math.round(pair.liquidity?.usd || 0).toLocaleString()}</span>
-                <span>Vol: $${Math.round(pair.volume?.h24 || 0).toLocaleString()}</span>
+            <div style="display:flex; justify-content: space-between; margin-top: 10px;">
+                <button class="btn-action" onclick="window.open('https://rugcheck.xyz/tokens/${pair.baseToken.address}', '_blank')" style="background: #444;">🛡️ RugCheck</button>
+                <button class="btn-action" onclick="window.open('${pair.url}', '_blank')">📈 Chart</button>
             </div>
-
-            <div style="display:flex; justify-content: space-between;">
-                <button class="btn-action" onclick="window.open('${pair.url}', '_blank')">Chart</button>
-                <button class="btn-action" onclick="navigator.clipboard.writeText('${pair.baseToken.address}'); alert('CA Copied!')">Copy CA</button>
-            </div>
+            
+            <button class="btn-action" style="width:100%; margin-top:5px;" onclick="navigator.clipboard.writeText('${pair.baseToken.address}'); alert('CA Copied!')">📋 Copy Address</button>
         `;
         grid.appendChild(card);
     });
 }
-
-// Auto Refresh tiap 30 detik
-setInterval(fetchNewCoins, 30000);
-refreshBtn.addEventListener('click', fetchNewCoins);
-fetchNewCoins();
 
 // Logika Instal PWA
 let deferredPrompt;
