@@ -164,9 +164,13 @@ function displayCoins(items) {
         const tgLink     = safeUrl(links.find(l => l.type === 'telegram')?.url || '');
         const webLink    = safeUrl(links.find(l => l.label === 'Website')?.url || '');
 
-        const tempName   = extractTempName(item);
-        const safeCA     = sanitizeAttr(ca);
+        const tempName    = extractTempName(item);
+        const safeCA      = sanitizeAttr(ca);
         const safeItemUrl = sanitizeAttr(itemUrl);
+
+        // Deskripsi token — potong max 120 karakter agar tidak terlalu panjang
+        const rawDesc  = (item.description || '').trim();
+        const desc     = rawDesc.length > 120 ? rawDesc.slice(0, 117) + '…' : rawDesc;
 
         const card = document.createElement('div');
         card.className = 'card';
@@ -205,6 +209,9 @@ function displayCoins(items) {
             <div class="ca-box" onclick="copyCA('${safeCA}')" title="Klik untuk copy Contract Address">
                 📋&nbsp;${safeCA}
             </div>
+
+            <!-- Deskripsi token -->
+            ${desc ? `<div class="token-desc">${sanitizeAttr(desc)}</div>` : ''}
 
             <!-- Action buttons -->
             <div class="btn-grid">
