@@ -1,90 +1,66 @@
+const HELIUS_API_KEY = "b9fce816-011e-4502-91e4-f858655d32d3"; // Kosongkan "" jika belum punya
 const coinList = document.getElementById('coinList');
 const refreshBtn = document.getElementById('refreshBtn');
 
 async function fetchNewCoins() {
-    coinList.innerHTML = '<div style="text-align:center; padding:50px;">Memindai Token Terpanas...</div>';
+    coinList.innerHTML = '<div style="text-align:center; padding:50px; color:#14f195;">🔍 Sedang Memindai...</div>';
+    
     try {
-        // Kita ambil data pair terbaru di Solana
         const response = await fetch('https://api.dexscreener.com/latest/dex/tokens/solana');
         const data = await response.json();
         
-        if (data.pairs) {
-            // Urutkan berdasarkan perubahan harga 1 jam terakhir (tertinggi di atas)
-            const sorted = data.pairs.sort((a, b) => b.priceChange.h1 - a.priceChange.h1);
+        if (data.pairs && data.pairs.length > 0) {
+            // Urutkan berdasarkan Volume 24 jam tertinggi
+            const sorted = data.pairs.sort((a, b) => (b.volume?.h24 || 0) - (a.volume?.h24 || 0));
             displayCoins(sorted);
+        } else {
+            coinList.innerHTML = '<div style="text-align:center;">Data tidak ditemukan. Coba lagi.</div>';
         }
     } catch (error) {
-        coinList.innerHTML = 'Gagal memuat data.';
+        console.error("Error Fetch:", error);
+        coinList.innerHTML = '<div style="text-align:center; color:red;">Gagal koneksi ke server DexScreener.</div>';
     }
-}
-
-const HELIUS_API_KEY = "b9fce816-011e-4502-91e4-f858655d32d3";
-
-async function checkSecurity(mint) {
-    try {
-        const response = await fetch(`https://api.helius.xyz/v0/token-metadata?api-key=${HELIUS_API_KEY}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ mintAccounts: [mint] }),
-        });
-        const data = await response.json();
-        const meta = data[0]?.offChainData || {};
-        // Logika sederhana: Jika tidak ada data freeze, asumsikan aman (tergantung API response)
-        return meta;
-    } catch (e) { return null; }
 }
 
 function displayCoins(pairs) {
     coinList.innerHTML = '<div class="grid" id="grid"></div>';
     const grid = document.getElementById('grid');
 
-    pairs.slice(0, 15).forEach(pair => {
+    pairs.slice(0, 20).forEach(pair => {
         const ca = pair.baseToken.address;
         const liq = pair.liquidity?.usd || 0;
         const vol = pair.volume?.h24 || 0;
         const vlRatio = liq > 0 ? (vol / liq).toFixed(2) : 0;
 
         const card = document.createElement('div');
-        card.className = `card ${vlRatio > 3 ? 'trending' : ''}`;
+        card.className = `card ${vlRatio > 5 ? 'trending' : ''}`;
         
         card.innerHTML = `
-            <div class="badge-trend">V/L: ${vlRatio}</div>
+            <div class="badge-trend">${vlRatio > 10 ? '🔥 HIGH VOL' : '📊 V/L: ' + vlRatio}</div>
             <p style="font-size: 0.7rem; color: #888; margin: 0;">${pair.baseToken.symbol} / SOL</p>
-            <h3 class="name">${pair.baseToken.name}</h3>
-            <div class="price">$${parseFloat(pair.priceUsd).toFixed(8)}</div>
+            <h3 class="name" style="margin:5px 0;">${pair.baseToken.name}</h3>
+            <div class="price" style="color:#14f195; font-weight:bold;">$${parseFloat(pair.priceUsd).toFixed(8)}</div>
             
-            <div class="ca-box" id="ca-${ca}" onclick="navigator.clipboard.writeText('${ca}'); alert('CA Copied!')">
+            <div class="ca-box" style="background:#1a1a1a; padding:8px; border-radius:6px; font-size:0.7rem; margin:10px 0; word-break:break-all; cursor:pointer; border:1px dashed #333; color:#14f195;" onclick="navigator.clipboard.writeText('${ca}'); alert('CA Copied!')">
                 ${ca}
             </div>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-top: 10px;">
-                <button class="btn-action" style="background:#00f2ff; color:black;" onclick="window.open('https://gmgn.ai/sol/token/${ca}', '_blank')">📱 GMGN</button>
-                <button class="btn-action" style="background:#ff9900; color:black;" onclick="window.open('https://jup.ag/swap/SOL-${ca}', '_blank')">🪐 Jupiter</button>
-                <button class="btn-action" onclick="window.open('https://rugcheck.xyz/tokens/${ca}', '_blank')">🛡️ RugCheck</button>
-                <button class="btn-action" onclick="window.open('${pair.url}', '_blank')">📈 Chart</button>
-            </div>
-
-            <div style="font-size: 0.7rem; color: #aaa; margin-top: 10px; display: flex; justify-content: space-between;">
-                <span>Liq: $${Math.round(liq).toLocaleString()}</span>
-                <span>Vol: $${Math.round(vol).toLocaleString()}</span>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
+                <button class="btn-action" style="background:#00f2ff; color:black; padding:8px; border:none; border-radius:5px; font-weight:bold; cursor:pointer;" onclick="window.open('https://gmgn.ai/sol/token/${ca}', '_blank')">📱 GMGN</button>
+                <button class="btn-action" style="background:#ff9900; color:black; padding:8px; border:none; border-radius:5px; font-weight:bold; cursor:pointer;" onclick="window.open('https://jup.ag/swap/SOL-${ca}', '_blank')">🪐 Jup</button>
+                <button class="btn-action" style="background:#444; color:white; padding:8px; border:none; border-radius:5px; font-weight:bold; cursor:pointer;" onclick="window.open('https://rugcheck.xyz/tokens/${ca}', '_blank')">🛡️ Rug</button>
+                <button class="btn-action" style="background:#222; color:white; padding:8px; border:none; border-radius:5px; font-weight:bold; cursor:pointer;" onclick="window.open('${pair.url}', '_blank')">📈 Chart</button>
             </div>
         `;
         grid.appendChild(card);
     });
 }
 
-// Logika Instal PWA
-let deferredPrompt;
-window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    document.getElementById('installBtn').style.display = 'block';
-});
+// Jalankan pencarian pertama
+fetchNewCoins();
 
-document.getElementById('installBtn').addEventListener('click', async () => {
-    if (deferredPrompt) {
-        deferredPrompt.prompt();
-        deferredPrompt = null;
-        document.getElementById('installBtn').style.display = 'none';
-    }
-});
+// Refresh otomatis tiap 30 detik
+setInterval(fetchNewCoins, 30000);
+
+// Tombol Refresh Manual
+refreshBtn.addEventListener('click', fetchNewCoins);
