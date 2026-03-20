@@ -1,15 +1,26 @@
 {
-  "name": "Solana Tracker Pro",
+  "name": "Solana Early Tracker",
   "short_name": "SolTrack",
+  "description": "Solana new token early tracker with security scan",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#121212",
-  "theme_color": "#121212",
+  "orientation": "portrait-primary",
+  "background_color": "#050505",
+  "theme_color": "#050505",
+  "lang": "id",
   "icons": [
     {
       "src": "icon.png",
-      "sizes": "192x192",
-      "type": "image/png"
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

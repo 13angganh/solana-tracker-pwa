@@ -1,217 +1,351 @@
+// ================================================================
+// app.js — Solana Early Tracker
+// PWA logic (install button, SW update) ada di index.html
+// File ini HANYA berisi logika data & render
+// ================================================================
+
 const HELIUS_API_KEY = "b9fce816-011e-4502-91e4-f858655d32d3";
-const coinList = document.getElementById('coinList');
+
+// Cache hasil Helius di memori — supaya tidak re-fetch tiap interval
+// dan tidak habiskan API credits
+const heliusCache = new Map();
+
+// Referensi DOM
+const coinList   = document.getElementById('coinList');
 const refreshBtn = document.getElementById('refreshBtn');
 
-// ============================================================
-// CONFIRMED dari live API: DexScreener token-profiles/latest/v1
-// TIDAK PUNYA field .symbol. Yang ada: description, url, icon, links
-// Nama token HANYA ada di Helius: onChainData.data.name
-// Description bukan nama — isinya kalimat panjang marketing
-// ============================================================
+// Timer auto-refresh (disimpan agar bisa di-reset)
+let autoRefreshTimer = null;
 
+// ----------------------------------------------------------------
+// Helpers
+// ----------------------------------------------------------------
+
+function isBase58Address(str) {
+    return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(str);
+}
+
+// Nama sementara dari description sambil tunggu Helius
 function extractTempName(item) {
-    // Nama sementara sambil tunggu Helius
-    // Coba description — ambil kata pertama saja jika pendek
     if (item.description && item.description.trim().length > 0) {
         const firstWord = item.description.trim().split(/[\s\-\|\n.,!?]/)[0].trim();
         if (
             firstWord.length >= 2 &&
             firstWord.length <= 20 &&
             !firstWord.startsWith('http') &&
-            !/^[1-9A-HJ-NP-Za-km-z]{30,}$/.test(firstWord)
+            !isBase58Address(firstWord)
         ) {
             return firstWord.toUpperCase();
         }
     }
-    // Fallback: 6 char CA + "..." (akan diganti Helius nanti)
-    const ca = item.tokenAddress || "";
-    return ca.slice(0, 6).toUpperCase() + "...";
+    const ca = item.tokenAddress || '';
+    return ca.slice(0, 6).toUpperCase() + '…';
 }
 
-function isBase58Address(str) {
-    return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(str);
+// Sanitize string agar aman dimasukkan ke HTML attribute
+// (cegah XSS dari data API)
+function sanitizeAttr(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
 }
 
-async function fetchNewCoins() {
-    coinList.innerHTML = '<div style="text-align:center; padding:50px; color:#14f195;">🔍 Mencari Solana Gems...</div>';
+// Validasi URL — hanya izinkan http/https
+function safeUrl(url) {
+    if (!url) return '';
     try {
-        const response = await fetch('https://api.dexscreener.com/token-profiles/latest/v1');
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = await response.json();
-        const list = Array.isArray(data) ? data : (data.data || []);
-        const solanaGems = list.filter(item => item.chainId === 'solana');
-        if (solanaGems.length > 0) {
-            displayCoins(solanaGems);
-        } else {
-            coinList.innerHTML = '<div style="text-align:center; padding:20px; color:#aaa;">Data kosong, coba refresh...</div>';
-        }
-    } catch (error) {
-        console.error('fetchNewCoins error:', error);
-        coinList.innerHTML = `<div style="text-align:center; color:#ff4b4b; padding:20px;">❌ Error: ${error.message}</div>`;
+        const u = new URL(url);
+        return (u.protocol === 'https:' || u.protocol === 'http:') ? url : '';
+    } catch {
+        return '';
     }
 }
 
-function displayCoins(items) {
-    coinList.innerHTML = '<div class="grid" id="grid"></div>';
-    const grid = document.getElementById('grid');
-
-    items.slice(0, 15).forEach(item => {
-        const ca = item.tokenAddress || "";
-        const icon = item.icon || "";
-        const tempName = extractTempName(item);
-        const links = Array.isArray(item.links) ? item.links : [];
-        const xLink = links.find(l => l.type === 'twitter')?.url || "";
-        const tgLink = links.find(l => l.type === 'telegram')?.url || "";
-        const websiteLink = links.find(l => l.label === 'Website')?.url || "";
-
-        const card = document.createElement('div');
-        card.className = 'card';
-        card.innerHTML = `
-            <div class="badge-trend" style="background:#9945FF">SOLANA GEMS</div>
-            <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
-                ${icon
-                    ? `<img src="${icon}" style="width:45px;height:45px;border-radius:50%;border:2px solid #14f195;flex-shrink:0;" onerror="this.style.display='none'">`
-                    : '<div style="width:45px;height:45px;background:#333;border-radius:50%;flex-shrink:0;"></div>'
-                }
-                <div style="min-width:0; overflow:hidden;">
-                    <h3 class="name" id="name-${ca}" style="margin:0;color:white;font-size:1.1rem;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                        ${tempName} <span id="spinner-${ca}" style="font-size:0.6rem;color:#444;">⏳</span>
-                    </h3>
-                    <div id="ticker-${ca}" style="font-size:0.7rem;color:#14f195;margin-top:2px;font-family:monospace;"></div>
-                </div>
-            </div>
-            <div id="sec-${ca}" style="margin-top:10px;padding:8px;background:#1a1a1a;border-radius:8px;font-size:0.75rem;border:1px solid #222;">
-                🛡️ Scanning Authority...
-            </div>
-            <div class="ca-box" onclick="copyCA('${ca}')" title="Klik untuk copy CA">
-                📋 ${ca}
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                <button class="btn-action" style="background:#00f2ff;color:black;" onclick="window.open('https://gmgn.ai/sol/token/${ca}','_blank')">📱 GMGN</button>
-                <button class="btn-action" style="background:#ff9900;color:black;" onclick="window.open('https://jup.ag/swap/SOL-${ca}','_blank')">🪐 Jup</button>
-                <button class="btn-action" style="background:#444;color:white;" onclick="window.open('https://rugcheck.xyz/tokens/${ca}','_blank')">🛡️ Rug</button>
-                <button class="btn-action" style="background:#222;color:white;" onclick="window.open('${item.url}','_blank')">📈 Chart</button>
-            </div>
-            <div style="display:flex;gap:16px;margin-top:15px;justify-content:center;border-top:1px solid #222;padding-top:12px;flex-wrap:wrap;">
-                ${xLink ? `<a href="${xLink}" target="_blank" style="color:#1da1f2;text-decoration:none;font-size:0.85rem;">🐦 Twitter</a>` : ''}
-                ${tgLink ? `<a href="${tgLink}" target="_blank" style="color:#0088cc;text-decoration:none;font-size:0.85rem;">✈️ Telegram</a>` : ''}
-                ${websiteLink ? `<a href="${websiteLink}" target="_blank" style="color:#14f195;text-decoration:none;font-size:0.85rem;">🌐 Website</a>` : ''}
-            </div>
-        `;
-        grid.appendChild(card);
-        if (ca) fetchSecurity(ca);
-    });
-}
-
-function copyCA(ca) {
-    const fallback = () => {
-        const ta = document.createElement('textarea');
-        ta.value = ca;
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-        showToast('✅ CA Copied!');
-    };
-    if (navigator.clipboard) {
-        navigator.clipboard.writeText(ca).then(() => showToast('✅ CA Copied!')).catch(fallback);
-    } else { fallback(); }
-}
-
-function showToast(msg) {
+// ----------------------------------------------------------------
+// Toast notification
+// ----------------------------------------------------------------
+function showToast(msg, isError = false) {
     let t = document.getElementById('toast');
     if (!t) {
         t = document.createElement('div');
         t.id = 'toast';
-        t.style.cssText = 'position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#14f195;color:#000;padding:10px 20px;border-radius:8px;font-weight:bold;z-index:9999;font-size:0.9rem;box-shadow:0 4px 15px rgba(20,241,149,0.4);transition:opacity 0.3s;';
         document.body.appendChild(t);
     }
     t.textContent = msg;
     t.style.opacity = '1';
+    t.style.background = isError ? 'var(--danger)' : 'var(--sol-green)';
+    t.style.color = isError ? '#fff' : '#000';
     clearTimeout(t._timer);
-    t._timer = setTimeout(() => { t.style.opacity = '0'; }, 2000);
+    t._timer = setTimeout(() => { t.style.opacity = '0'; }, 2200);
 }
 
-async function fetchSecurity(mint) {
-    const secDiv = document.getElementById(`sec-${mint}`);
-    const nameEl = document.getElementById(`name-${mint}`);
-    const tickerEl = document.getElementById(`ticker-${mint}`);
-    const spinnerEl = document.getElementById(`spinner-${mint}`);
+// ----------------------------------------------------------------
+// Copy CA
+// ----------------------------------------------------------------
+function copyCA(ca) {
+    const fallback = () => {
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = ca;
+            ta.style.cssText = 'position:fixed;opacity:0;';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            showToast('✅ CA Copied!');
+        } catch {
+            showToast('❌ Gagal copy', true);
+        }
+    };
+
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(ca)
+            .then(() => showToast('✅ CA Copied!'))
+            .catch(fallback);
+    } else {
+        fallback();
+    }
+}
+
+// Expose ke global karena dipakai di onclick attribute
+window.copyCA = copyCA;
+
+// ----------------------------------------------------------------
+// Fetch DexScreener — data token baru
+// ----------------------------------------------------------------
+async function fetchNewCoins() {
+    // Reset timer agar tidak double-fetch
+    clearInterval(autoRefreshTimer);
+
+    coinList.innerHTML = '<div class="state-msg loading">🔍 Mencari Solana Gems…</div>';
 
     try {
-        const response = await fetch(`https://api.helius.xyz/v0/token-metadata?api-key=${HELIUS_API_KEY}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ mintAccounts: [mint] }),
+        const response = await fetch('https://api.dexscreener.com/token-profiles/latest/v1', {
+            cache: 'no-store'   // selalu ambil data terbaru, tidak pakai browser cache
         });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        if (!response.ok) throw new Error(`DexScreener HTTP ${response.status}`);
+
         const data = await response.json();
+        const list = Array.isArray(data) ? data : (data.data || []);
+        const solanaGems = list.filter(item => item.chainId === 'solana');
+
+        if (solanaGems.length > 0) {
+            displayCoins(solanaGems);
+        } else {
+            coinList.innerHTML = '<div class="state-msg">📭 Data kosong, coba refresh…</div>';
+        }
+    } catch (err) {
+        console.error('[App] fetchNewCoins error:', err);
+        coinList.innerHTML = `<div class="state-msg error">❌ ${err.message}</div>`;
+    }
+
+    // Restart timer (60 detik — hemat Helius credits)
+    autoRefreshTimer = setInterval(fetchNewCoins, 60000);
+}
+
+// ----------------------------------------------------------------
+// Render cards
+// ----------------------------------------------------------------
+function displayCoins(items) {
+    coinList.innerHTML = '<div class="grid" id="grid"></div>';
+    const grid = document.getElementById('grid');
+
+    items.slice(0, 15).forEach((item, idx) => {
+        const ca      = item.tokenAddress || '';
+        const icon    = item.icon         || '';
+        const itemUrl = safeUrl(item.url) || '';
+
+        const links      = Array.isArray(item.links) ? item.links : [];
+        const xLink      = safeUrl(links.find(l => l.type === 'twitter')?.url  || '');
+        const tgLink     = safeUrl(links.find(l => l.type === 'telegram')?.url || '');
+        const webLink    = safeUrl(links.find(l => l.label === 'Website')?.url || '');
+
+        const tempName   = extractTempName(item);
+        const safeCA     = sanitizeAttr(ca);
+        const safeItemUrl = sanitizeAttr(itemUrl);
+
+        const card = document.createElement('div');
+        card.className = 'card';
+        // Stagger animasi
+        card.style.animationDelay = `${idx * 40}ms`;
+
+        card.innerHTML = `
+            <div class="badge-trend">SOLANA GEMS</div>
+
+            <!-- Icon + Nama -->
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;padding-right:4px;">
+                ${icon
+                    ? `<img
+                            src="${sanitizeAttr(icon)}"
+                            alt="token icon"
+                            width="45" height="45"
+                            style="border-radius:50%;border:2px solid var(--sol-green);flex-shrink:0;object-fit:cover;"
+                            onerror="this.replaceWith(document.createElement('div'));this.style='width:45px;height:45px;background:#222;border-radius:50%;flex-shrink:0;'"
+                        >`
+                    : '<div style="width:45px;height:45px;background:#222;border-radius:50%;flex-shrink:0;"></div>'
+                }
+                <div style="min-width:0;flex:1;overflow:hidden;">
+                    <h3 class="name" id="name-${safeCA}">
+                        ${tempName}<span id="spinner-${safeCA}" style="font-size:0.55rem;color:#444;margin-left:4px;">⏳</span>
+                    </h3>
+                    <div id="ticker-${safeCA}" style="font-size:0.72rem;color:var(--sol-green);margin-top:2px;font-family:monospace;min-height:1em;"></div>
+                </div>
+            </div>
+
+            <!-- Security scan -->
+            <div id="sec-${safeCA}" class="sec-box">
+                <span style="color:#444;">🛡️ Scanning…</span>
+            </div>
+
+            <!-- CA Box -->
+            <div class="ca-box" onclick="copyCA('${safeCA}')" title="Klik untuk copy Contract Address">
+                📋&nbsp;${safeCA}
+            </div>
+
+            <!-- Action buttons -->
+            <div class="btn-grid">
+                <button class="btn-action" style="background:#00e8f5;color:#000;"
+                    onclick="window.open('https://gmgn.ai/sol/token/${safeCA}','_blank','noopener')">
+                    📱 GMGN
+                </button>
+                <button class="btn-action" style="background:#ff9900;color:#000;"
+                    onclick="window.open('https://jup.ag/swap/SOL-${safeCA}','_blank','noopener')">
+                    🪐 Jup
+                </button>
+                <button class="btn-action" style="background:#2a2a2a;color:#fff;"
+                    onclick="window.open('https://rugcheck.xyz/tokens/${safeCA}','_blank','noopener')">
+                    🛡️ RugCheck
+                </button>
+                ${itemUrl
+                    ? `<button class="btn-action" style="background:#1a1a1a;color:#fff;"
+                            onclick="window.open('${safeItemUrl}','_blank','noopener')">
+                            📈 Chart
+                        </button>`
+                    : '<div></div>'
+                }
+            </div>
+
+            <!-- Social links -->
+            ${(xLink || tgLink || webLink) ? `
+            <div class="social-links">
+                ${xLink    ? `<a href="${sanitizeAttr(xLink)}"   target="_blank" rel="noopener" style="color:#1d9bf0;">🐦 Twitter</a>`  : ''}
+                ${tgLink   ? `<a href="${sanitizeAttr(tgLink)}"  target="_blank" rel="noopener" style="color:#0088cc;">✈️ Telegram</a>` : ''}
+                ${webLink  ? `<a href="${sanitizeAttr(webLink)}" target="_blank" rel="noopener" style="color:var(--sol-green);">🌐 Website</a>` : ''}
+            </div>` : ''}
+        `;
+
+        grid.appendChild(card);
+
+        // Fetch Helius hanya jika CA valid
+        if (ca && isBase58Address(ca)) {
+            fetchSecurity(ca);
+        } else if (ca) {
+            // CA tidak standard — hapus spinner saja
+            const sp = document.getElementById(`spinner-${safeCA}`);
+            if (sp) sp.remove();
+        }
+    });
+}
+
+// ----------------------------------------------------------------
+// Fetch Helius — nama on-chain & security info
+// Pakai in-memory cache agar tidak re-fetch token yang sama
+// ----------------------------------------------------------------
+async function fetchSecurity(mint) {
+    const safeId  = sanitizeAttr(mint);
+    const nameEl  = document.getElementById(`name-${safeId}`);
+    const tickerEl= document.getElementById(`ticker-${safeId}`);
+    const spinnerEl = document.getElementById(`spinner-${safeId}`);
+    const secDiv  = document.getElementById(`sec-${safeId}`);
+
+    // Pakai cache jika sudah pernah di-fetch
+    if (heliusCache.has(mint)) {
+        const cached = heliusCache.get(mint);
+        applyHeliusData(cached, nameEl, tickerEl, spinnerEl, secDiv);
+        return;
+    }
+
+    try {
+        const res = await fetch(
+            `https://api.helius.xyz/v0/token-metadata?api-key=${HELIUS_API_KEY}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mintAccounts: [mint] })
+            }
+        );
+        if (!res.ok) throw new Error(`Helius HTTP ${res.status}`);
+
+        const data = await res.json();
         const d = (Array.isArray(data) ? data[0] : data) || {};
 
-        // ============================================================
-        // NAMA RESMI: hanya dari Helius on-chain metadata
-        // onChainData.data.name  = nama on-chain (paling akurat)
-        // legacyMetadata.name    = fallback token lama
-        // ============================================================
-        const heliusName = (d.onChainData?.data?.name || d.legacyMetadata?.name || "").trim();
-        const heliusSymbol = (d.onChainData?.data?.symbol || d.legacyMetadata?.symbol || "").trim();
+        // Simpan ke cache
+        heliusCache.set(mint, d);
+        applyHeliusData(d, nameEl, tickerEl, spinnerEl, secDiv);
 
-        if (nameEl) {
-            if (heliusName.length > 0 && !isBase58Address(heliusName)) {
-                // Update nama dengan data real dari blockchain
-                nameEl.innerHTML = heliusName.toUpperCase();
-            } else {
-                // Hapus spinner saja, biarkan nama sementara
-                if (spinnerEl) spinnerEl.remove();
-            }
-        }
-
-        // Tampilkan $TICKER di bawah nama
-        if (tickerEl && heliusSymbol.length > 0) {
-            tickerEl.textContent = `$${heliusSymbol}`;
-        }
-
-        // Security info
-        const isMint = d.onChainData?.mintAuthority === null;
-        const isFreeze = d.onChainData?.freezeAuthority === null;
-        if (secDiv) {
-            secDiv.innerHTML = `
-                <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <span style="color:${isMint ? '#14f195' : 'orange'}">${isMint ? '✅ Mint Off' : '⚠️ Mint On'}</span>
-                    <span style="color:${isFreeze ? '#14f195' : 'orange'}">${isFreeze ? '✅ Freeze Off' : '⚠️ Freeze On'}</span>
-                </div>
-            `;
-        }
-    } catch (e) {
-        console.error('fetchSecurity error:', e);
-        if (secDiv) secDiv.innerHTML = '<span style="color:#555;font-size:0.7rem;">Security: N/A</span>';
+    } catch (err) {
+        console.warn('[App] fetchSecurity error for', mint, err.message);
+        if (secDiv) secDiv.innerHTML = '<span style="color:#333;font-size:0.7rem;">Security: N/A</span>';
         if (spinnerEl) spinnerEl.remove();
     }
 }
 
-// =====================
-// PWA Install Handler
-// =====================
-let deferredPrompt = null;
-const installBtn = document.getElementById('installBtn');
-window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    if (installBtn) installBtn.style.display = 'block';
-});
-if (installBtn) {
-    installBtn.addEventListener('click', async () => {
-        if (!deferredPrompt) return;
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        if (outcome === 'accepted') installBtn.style.display = 'none';
-        deferredPrompt = null;
-    });
+function applyHeliusData(d, nameEl, tickerEl, spinnerEl, secDiv) {
+    // ---- Nama on-chain (sumber paling akurat) ----
+    const heliusName = (
+        d?.onChainData?.data?.name ||
+        d?.legacyMetadata?.name    ||
+        ''
+    ).trim();
+
+    const heliusSymbol = (
+        d?.onChainData?.data?.symbol ||
+        d?.legacyMetadata?.symbol    ||
+        ''
+    ).trim();
+
+    if (nameEl) {
+        if (heliusName.length > 0 && !isBase58Address(heliusName)) {
+            nameEl.textContent = heliusName.toUpperCase();
+        } else {
+            // Tidak ada nama di Helius — hapus spinner, biarkan nama sementara
+            if (spinnerEl) spinnerEl.remove();
+        }
+    }
+
+    if (tickerEl && heliusSymbol.length > 0) {
+        tickerEl.textContent = `$${heliusSymbol}`;
+    }
+
+    // ---- Security ----
+    const mintAuth   = d?.onChainData?.mintAuthority;
+    const freezeAuth = d?.onChainData?.freezeAuthority;
+
+    // null  = authority sudah di-revoke (aman)
+    // value = masih aktif (waspada)
+    const isMintOff   = mintAuth   === null;
+    const isFreezeOff = freezeAuth === null;
+
+    if (secDiv) {
+        secDiv.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;width:100%;">
+                <span style="color:${isMintOff   ? 'var(--sol-green)' : 'orange'};">
+                    ${isMintOff   ? '✅ Mint Off'   : '⚠️ Mint On'}
+                </span>
+                <span style="color:${isFreezeOff ? 'var(--sol-green)' : 'orange'};">
+                    ${isFreezeOff ? '✅ Freeze Off' : '⚠️ Freeze On'}
+                </span>
+            </div>
+        `;
+    }
 }
 
-// =====================
+// ----------------------------------------------------------------
 // Init
-// =====================
-fetchNewCoins();
-setInterval(fetchNewCoins, 30000);
+// ----------------------------------------------------------------
 refreshBtn.addEventListener('click', fetchNewCoins);
+fetchNewCoins();  // Load pertama saat halaman dibuka

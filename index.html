@@ -2,30 +2,147 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solana Tracker Pro</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Solana Early Tracker</title>
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
-    <link rel="icon" href="icon.png" type="image/png">
+
+    <!-- Favicon & Icon untuk semua platform -->
+    <link rel="icon" type="image/png" sizes="512x512" href="icon.png">
+    <link rel="shortcut icon" href="icon.png">
+    <!-- iOS Safari: harus pakai apple-touch-icon (bukan rel="icon") -->
+    <link rel="apple-touch-icon" href="icon.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="icon.png">
+    <link rel="apple-touch-icon" sizes="167x167" href="icon.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
+
+    <!-- PWA meta tags -->
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="mobile-web-app-status-bar-style" content="black">
-    <link rel="touch-icon" href="icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="SolTrack">
+    <meta name="theme-color" content="#050505">
+    <meta name="description" content="Solana new token early tracker with security scan">
 </head>
 <body>
     <header>
         <h1>🟢 Solana Early Tracker</h1>
-        <button id="refreshBtn">Refresh Data</button>
-        <button id="installBtn" style="display:none; background: #9945FF; color: white; margin-top: 10px;">✨ Instal ke HP / Desktop</button>
+        <button id="refreshBtn">🔄 Refresh Data</button>
+
+        <!-- Tombol Install PWA: muncul otomatis jika belum diinstall -->
+        <button id="installBtn" style="display:none;">✨ Install ke HP / Desktop</button>
+
+        <!-- Banner update: muncul otomatis jika ada versi baru di server -->
+        <div id="updateBanner" style="display:none;">
+            <span>🆕 Versi baru tersedia</span>
+            <button id="updateBtn">Update Sekarang</button>
+        </div>
     </header>
+
     <main>
         <div id="coinList">Memuat data koin potensial...</div>
     </main>
+
     <script src="app.js"></script>
+
     <script>
-      // Mendaftarkan Service Worker agar bisa diinstal di HP
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js');
-      }
+    // ================================================================
+    // SERVICE WORKER + PWA — Semua logic terpusat di sini
+    // Tidak ada duplicate handler di app.js
+    // ================================================================
+
+    (function() {
+        if (!('serviceWorker' in navigator)) return;
+
+        let newWorkerWaiting = null;
+
+        // Register SW
+        navigator.serviceWorker.register('/sw.js')
+            .then(function(reg) {
+
+                // Cek update setiap 30 detik (selain cek otomatis browser)
+                setInterval(function() { reg.update(); }, 30000);
+
+                // Jika ada SW baru yang installing/waiting
+                function trackInstalling(worker) {
+                    worker.addEventListener('statechange', function() {
+                        if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+                            // Ada versi baru sudah siap, tapi belum aktif
+                            newWorkerWaiting = worker;
+                            showUpdateBanner();
+                        }
+                    });
+                }
+
+                // Tangkap SW yang sedang installing saat register
+                if (reg.installing) {
+                    trackInstalling(reg.installing);
+                }
+
+                // Tangkap SW baru yang ditemukan setelah register
+                reg.addEventListener('updatefound', function() {
+                    if (reg.installing) trackInstalling(reg.installing);
+                });
+            })
+            .catch(function(err) {
+                console.error('[SW] Registration failed:', err);
+            });
+
+        // Jika SW baru sudah aktif (setelah skipWaiting) → reload halaman
+        // Ini yang menyebabkan user otomatis dapat versi terbaru
+        var refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function() {
+            if (!refreshing) {
+                refreshing = true;
+                window.location.reload();
+            }
+        });
+
+        // ----------------------------------------------------------------
+        // Update Banner
+        // ----------------------------------------------------------------
+        function showUpdateBanner() {
+            var banner = document.getElementById('updateBanner');
+            if (banner) banner.style.display = 'flex';
+        }
+
+        document.getElementById('updateBtn').addEventListener('click', function() {
+            document.getElementById('updateBanner').style.display = 'none';
+            if (newWorkerWaiting) {
+                // Perintahkan SW baru untuk ambil alih sekarang
+                newWorkerWaiting.postMessage({ type: 'SKIP_WAITING' });
+            }
+        });
+
+        // ----------------------------------------------------------------
+        // Install Button
+        // ----------------------------------------------------------------
+        var deferredPrompt = null;
+        var installBtn = document.getElementById('installBtn');
+
+        window.addEventListener('beforeinstallprompt', function(e) {
+            e.preventDefault();
+            deferredPrompt = e;
+            installBtn.style.display = 'block';
+        });
+
+        installBtn.addEventListener('click', function() {
+            if (!deferredPrompt) return;
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then(function(result) {
+                if (result.outcome === 'accepted') {
+                    installBtn.style.display = 'none';
+                }
+                deferredPrompt = null;
+            });
+        });
+
+        window.addEventListener('appinstalled', function() {
+            installBtn.style.display = 'none';
+            deferredPrompt = null;
+        });
+
+    })();
     </script>
 </body>
 </html>

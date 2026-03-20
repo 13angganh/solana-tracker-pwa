@@ -7,61 +7,309 @@
     --danger: #ff4b4b;
 }
 
-body { font-family: 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; }
+*, *::before, *::after { box-sizing: border-box; }
 
-header { 
-    position: sticky; top: 0; z-index: 100; background: rgba(5,5,5,0.9);
-    backdrop-filter: blur(10px); padding: 15px; border-bottom: 1px solid #222; text-align: center;
+body {
+    font-family: 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    margin: 0;
+    padding: 0 10px 10px;
+    /* Safe area untuk iPhone notch/island */
+    padding-left: max(10px, env(safe-area-inset-left));
+    padding-right: max(10px, env(safe-area-inset-right));
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
 }
 
-h1 { font-size: 1.2rem; margin: 0 0 10px 0; background: linear-gradient(to right, var(--sol-green), var(--sol-purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-
-.grid { display: grid; gap: 15px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); margin-top: 10px; }
-
-.card { 
-    background: var(--card); border-radius: 12px; padding: 15px; 
-    border-left: 4px solid var(--sol-green); position: relative;
-    transition: 0.3s;
+/* ----------------------------------------------------------------
+   HEADER
+---------------------------------------------------------------- */
+header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(5,5,5,0.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    padding: 12px 15px;
+    border-bottom: 1px solid #222;
+    text-align: center;
+    /* Safe area atas */
+    padding-top: max(12px, env(safe-area-inset-top));
 }
 
-.trending { border-left-color: var(--sol-purple); animation: pulse 2s infinite; }
-@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(153, 69, 255, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(153, 69, 255, 0); } 100% { box-shadow: 0 0 0 0 rgba(153, 69, 255, 0); } }
+h1 {
+    font-size: 1.2rem;
+    margin: 0 0 10px 0;
+    background: linear-gradient(to right, var(--sol-green), var(--sol-purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
 
-.price { font-size: 1.3rem; font-weight: bold; margin: 10px 0; color: var(--sol-green); }
-.name { font-size: 1.1rem; font-weight: bold; margin: 0; }
-.stats { display: flex; justify-content: space-between; font-size: 0.8rem; color: #aaa; margin-top: 10px; border-top: 1px solid #222; padding-top: 10px; }
+/* ----------------------------------------------------------------
+   BUTTONS HEADER
+---------------------------------------------------------------- */
+#refreshBtn {
+    background: var(--sol-green);
+    color: #000;
+    padding: 10px 20px;
+    width: 100%;
+    font-weight: bold;
+    font-size: 0.9rem;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: filter 0.2s;
+}
+#refreshBtn:hover { filter: brightness(1.1); }
+#refreshBtn:active { filter: brightness(0.9); }
 
-.badge-trend { background: var(--sol-purple); color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; position: absolute; top: 15px; right: 15px; }
+#installBtn {
+    display: none;
+    width: 100%;
+    margin-top: 8px;
+    padding: 10px 20px;
+    background: var(--sol-purple);
+    color: #fff;
+    font-weight: bold;
+    font-size: 0.9rem;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: filter 0.2s;
+}
+#installBtn:hover { filter: brightness(1.15); }
 
-button { border-radius: 8px; cursor: pointer; border: none; font-weight: bold; }
-#refreshBtn { background: var(--sol-green); padding: 10px 20px; width: 100%; }
-.btn-action { background: #222; color: white; padding: 8px; width: 48%; margin-top: 10px; border: 1px solid #333; }
+/* ----------------------------------------------------------------
+   UPDATE BANNER
+---------------------------------------------------------------- */
+#updateBanner {
+    display: none;         /* JS set ke flex saat ada update */
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 8px;
+    padding: 9px 14px;
+    background: var(--sol-green);
+    color: #000;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: bold;
+}
+#updateBtn {
+    background: #000;
+    color: var(--sol-green);
+    border: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 0.8rem;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+#updateBtn:hover { filter: brightness(1.3); }
+
+/* ----------------------------------------------------------------
+   GRID & CARDS
+---------------------------------------------------------------- */
+main { margin-top: 10px; }
+
+.grid {
+    display: grid;
+    gap: 15px;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+
+.card {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 15px;
+    border-left: 4px solid var(--sol-green);
+    position: relative;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(20, 241, 149, 0.08);
+}
+
+/* ----------------------------------------------------------------
+   BADGE
+---------------------------------------------------------------- */
+.badge-trend {
+    background: var(--sol-purple);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.68rem;
+    font-weight: bold;
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    letter-spacing: 0.3px;
+}
+
+/* ----------------------------------------------------------------
+   TOKEN NAME & TICKER
+---------------------------------------------------------------- */
+.name {
+    font-size: 1.05rem;
+    font-weight: bold;
+    margin: 0;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* beri ruang dari badge di kanan */
+    padding-right: 90px;
+}
+
+/* ----------------------------------------------------------------
+   CA BOX
+---------------------------------------------------------------- */
+.ca-box {
+    cursor: pointer;
+    background: #0d0d0d;
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.68rem;
+    word-break: break-all;
+    margin: 10px 0;
+    border: 1px dashed #2a2a2a;
+    color: var(--sol-green);
+    text-align: center;
+    transition: border-color 0.2s, background 0.2s;
+    user-select: none;
+}
+.ca-box:hover {
+    border-color: var(--sol-green);
+    background: #111;
+}
+.ca-box:active { background: #1a1a1a; }
+
+/* ----------------------------------------------------------------
+   ACTION BUTTONS (grid 2 kolom dalam card)
+---------------------------------------------------------------- */
+.btn-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+    margin-top: 4px;
+}
+
 .btn-action {
-    font-size: 0.75rem !important;
-    padding: 8px 2px !important;
+    font-size: 0.78rem;
+    font-weight: bold;
+    padding: 9px 4px;
+    border: none;
+    border-radius: 7px;
+    cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 3px;
-    border-radius: 6px;
-    transition: 0.2s;
+    gap: 4px;
+    transition: filter 0.15s, transform 0.15s;
+    white-space: nowrap;
 }
-
 .btn-action:hover {
     filter: brightness(1.2);
-    transform: translateY(-2px);
+    transform: translateY(-1px);
+}
+.btn-action:active {
+    filter: brightness(0.9);
+    transform: translateY(0);
 }
 
-.ca-box {
-    cursor: pointer;
-    background: #1a1a1a;
-    padding: 8px;
-    border-radius: 6px;
-    font-family: monospace;
-    font-size: 0.7rem;
-    word-break: break-all;
-    margin: 10px 0;
-    border: 1px dashed #333;
-    color: var(--sol-green);
+/* ----------------------------------------------------------------
+   SOCIAL LINKS
+---------------------------------------------------------------- */
+.social-links {
+    display: flex;
+    gap: 14px;
+    margin-top: 13px;
+    justify-content: center;
+    border-top: 1px solid #1e1e1e;
+    padding-top: 11px;
+    flex-wrap: wrap;
+}
+.social-links a {
+    text-decoration: none;
+    font-size: 0.82rem;
+    transition: opacity 0.2s;
+}
+.social-links a:hover { opacity: 0.75; }
+
+/* ----------------------------------------------------------------
+   SECURITY BOX
+---------------------------------------------------------------- */
+.sec-box {
+    margin-top: 10px;
+    padding: 8px 10px;
+    background: #0f0f0f;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    border: 1px solid #1c1c1c;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+}
+
+/* ----------------------------------------------------------------
+   TOAST NOTIFICATION
+---------------------------------------------------------------- */
+#toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--sol-green);
+    color: #000;
+    padding: 10px 22px;
+    border-radius: 8px;
+    font-weight: bold;
+    z-index: 9999;
+    font-size: 0.88rem;
+    box-shadow: 0 4px 20px rgba(20, 241, 149, 0.35);
+    transition: opacity 0.35s ease;
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+/* ----------------------------------------------------------------
+   LOADING / EMPTY STATES
+---------------------------------------------------------------- */
+.state-msg {
     text-align: center;
+    padding: 50px 20px;
+    font-size: 0.95rem;
+    color: #666;
+}
+.state-msg.loading { color: var(--sol-green); }
+.state-msg.error   { color: var(--danger); }
+
+/* ----------------------------------------------------------------
+   ANIMATIONS
+---------------------------------------------------------------- */
+@keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(153, 69, 255, 0.4); }
+    70%  { box-shadow: 0 0 0 10px rgba(153, 69, 255, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(153, 69, 255, 0); }
+}
+.trending { border-left-color: var(--sol-purple); animation: pulse 2s infinite; }
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.card { animation: fadeIn 0.3s ease both; }
+
+/* ----------------------------------------------------------------
+   RESPONSIVE
+---------------------------------------------------------------- */
+@media (max-width: 360px) {
+    .grid { grid-template-columns: 1fr; }
+    .name { font-size: 0.95rem; }
 }
