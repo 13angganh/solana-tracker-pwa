@@ -27,9 +27,9 @@ function displayCoins(items) {
     const grid = document.getElementById('grid');
 
     items.slice(0, 15).forEach(item => {
-        // PERBAIKAN: Menggunakan properti yang benar agar tidak undefined
+        // PERBAIKAN: Menggunakan properti yang benar agar tidak undefined atau "TOKEN" terus
         const ca = item.tokenAddress || "";
-        const symbol = item.symbol || "TOKEN";
+        const symbol = item.symbol || "UNKNOWN";
         const icon = item.icon || "";
         const xLink = item.links?.find(l => l.type === 'twitter')?.url || "";
         const tgLink = item.links?.find(l => l.type === 'telegram')?.url || "";
