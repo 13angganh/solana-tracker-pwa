@@ -70,3 +70,19 @@ document.getElementById('installBtn').addEventListener('click', async () => {
         document.getElementById('installBtn').style.display = 'none';
     }
 });
+// --- FITUR AUTO-REFRESH OTOMATIS ---
+
+// Buat timer yang menjalankan fungsi fetchNewCoins setiap 30.000 milidetik (30 detik)
+setInterval(() => {
+    console.log("Auto-refreshing data...");
+    fetchNewCoins();
+}, 30000); 
+
+// Opsional: Tambahkan indikator visual di tombol agar kamu tahu kapan dia refresh
+refreshBtn.addEventListener('click', () => {
+    // Memberi efek loading sederhana saat diklik manual
+    refreshBtn.innerText = "🔄 Memindai...";
+    setTimeout(() => {
+        refreshBtn.innerText = "Refresh Data";
+    }, 2000);
+});
