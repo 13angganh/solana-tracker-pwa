@@ -36,3 +36,32 @@ h1 { font-size: 1.2rem; margin: 0 0 10px 0; background: linear-gradient(to right
 button { border-radius: 8px; cursor: pointer; border: none; font-weight: bold; }
 #refreshBtn { background: var(--sol-green); padding: 10px 20px; width: 100%; }
 .btn-action { background: #222; color: white; padding: 8px; width: 48%; margin-top: 10px; border: 1px solid #333; }
+.btn-action {
+    font-size: 0.75rem !important;
+    padding: 8px 2px !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    border-radius: 6px;
+    transition: 0.2s;
+}
+
+.btn-action:hover {
+    filter: brightness(1.2);
+    transform: translateY(-2px);
+}
+
+.ca-box {
+    cursor: pointer;
+    background: #1a1a1a;
+    padding: 8px;
+    border-radius: 6px;
+    font-family: monospace;
+    font-size: 0.7rem;
+    word-break: break-all;
+    margin: 10px 0;
+    border: 1px dashed #333;
+    color: var(--sol-green);
+    text-align: center;
+}
