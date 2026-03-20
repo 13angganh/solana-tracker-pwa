@@ -3,52 +3,53 @@ const coinList = document.getElementById('coinList');
 const refreshBtn = document.getElementById('refreshBtn');
 
 async function fetchNewCoins() {
-    coinList.innerHTML = '<div style="text-align:center; padding:50px; color:#14f195;">🔍 Memindai Jalur Alternatif Solana...</div>';
+    coinList.innerHTML = '<div style="text-align:center; padding:50px; color:#14f195;">🔍 Mencari Koin Micin Solana Terbaru...</div>';
     
     try {
-        // JALUR 1: Latest Pairs (Paling Stabil)
-        let response = await fetch('https://api.dexscreener.com/latest/dex/search?q=solana');
-        let data = await response.json();
+        // Kita ambil "Latest Pairs" (Koin yang baru saja listing di Dex manapun)
+        const response = await fetch('https://api.dexscreener.com/dex/latest-pairs');
+        const data = await response.json();
         
-        // JALUR 2: Jika Jalur 1 Kosong, pakai Token Profiles
-        if (!data.pairs || data.pairs.length === 0) {
-            console.log("Jalur 1 kosong, pindah Jalur 2...");
-            const res2 = await fetch('https://api.dexscreener.com/token-profiles/latest/v1');
-            const data2 = await res2.json();
-            const solanaOnly = data2.filter(item => item.chainId === 'solana');
-            displayCoins(solanaOnly, true); // true = data profile
+        // FILTER: Hanya ambil yang dari chain 'solana'
+        const solanaOnly = data.pairs.filter(pair => pair.chainId === 'solana');
+
+        if (solanaOnly && solanaOnly.length > 0) {
+            displayCoins(solanaOnly);
         } else {
-            displayCoins(data.pairs, false); // false = data pairs lengkap
+            coinList.innerHTML = '<div style="text-align:center; padding:20px;">Belum ada koin baru di Solana detik ini. Tunggu sebentar.</div>';
         }
     } catch (error) {
-        console.error("Fetch Error:", error);
-        coinList.innerHTML = '<div style="text-align:center; color:red;">Koneksi API Gagal. Coba lagi 10 detik.</div>';
+        console.error("Error:", error);
+        coinList.innerHTML = '<div style="text-align:center; color:red;">Koneksi API Gagal. Coba lagi.</div>';
     }
 }
 
-function displayCoins(items, isProfile) {
+function displayCoins(pairs) {
     coinList.innerHTML = '<div class="grid" id="grid"></div>';
     const grid = document.getElementById('grid');
 
-    items.slice(0, 15).forEach(item => {
-        // Penyesuaian variabel karena struktur API berbeda
-        const ca = isProfile ? item.tokenAddress : item.baseToken.address;
-        const symbol = isProfile ? item.symbol : item.baseToken.symbol;
-        const name = isProfile ? (item.description ? 'New Project' : 'Solana Coin') : item.baseToken.name;
-        const price = isProfile ? 'Check Chart' : '$' + parseFloat(item.priceUsd).toFixed(8);
-        const liq = isProfile ? 0 : (item.liquidity?.usd || 0);
+    // Tampilkan 15 koin terbaru
+    pairs.slice(0, 15).forEach(pair => {
+        const ca = pair.baseToken.address;
+        const symbol = pair.baseToken.symbol;
+        const name = pair.baseToken.name;
+        const price = '$' + parseFloat(pair.priceUsd).toFixed(8);
+        const h1 = pair.priceChange?.h1 || 0;
 
         const card = document.createElement('div');
         card.className = 'card';
+        card.style.borderLeft = h1 > 0 ? '4px solid #14f195' : '4px solid #ff4b4b';
         
         card.innerHTML = `
-            <div class="badge-trend">${isProfile ? '🆕 NEW' : '📊 ACTIVE'}</div>
+            <div class="badge-trend" style="background:${h1 >= 0 ? '#9945FF' : '#444'}">
+                ${h1 >= 0 ? '🚀 ' + h1 + '%' : '📉 ' + h1 + '%'}
+            </div>
             <p style="font-size: 0.7rem; color: #888; margin: 0;">${symbol} / SOL</p>
-            <h3 class="name" style="margin:5px 0; color:white;">${name}</h3>
+            <h3 class="name" style="margin:5px 0; color:white; font-size:1rem;">${name}</h3>
             <div class="price" style="color:#14f195; font-size:1.1rem; font-weight:bold;">${price}</div>
             
             <div id="sec-${ca}" style="margin-top:10px; padding:8px; background:#1a1a1a; border-radius:8px; font-size:0.7rem; color:#aaa;">
-                🛡️ Security Data Pending...
+                ⏳ Memeriksa Otoritas...
             </div>
 
             <div class="ca-box" style="background:#1a1a1a; padding:8px; border-radius:6px; font-size:0.7rem; margin:10px 0; word-break:break-all; border:1px dashed #333; color:#14f195; cursor:pointer;" onclick="navigator.clipboard.writeText('${ca}'); alert('CA Copied!')">
@@ -59,15 +60,15 @@ function displayCoins(items, isProfile) {
                 <button class="btn-action" style="background:#00f2ff; color:black; font-weight:bold; padding:8px; border:none; border-radius:5px;" onclick="window.open('https://gmgn.ai/sol/token/${ca}', '_blank')">📱 GMGN</button>
                 <button class="btn-action" style="background:#ff9900; color:black; font-weight:bold; padding:8px; border:none; border-radius:5px;" onclick="window.open('https://jup.ag/swap/SOL-${ca}', '_blank')">🪐 Jup</button>
                 <button class="btn-action" style="background:#444; color:white; font-weight:bold; padding:8px; border:none; border-radius:5px;" onclick="window.open('https://rugcheck.xyz/tokens/${ca}', '_blank')">🛡️ Rug</button>
-                <button class="btn-action" style="background:#222; color:white; font-weight:bold; padding:8px; border:none; border-radius:5px;" onclick="window.open('${isProfile ? item.url : item.url}', '_blank')">📈 Chart</button>
+                <button class="btn-action" style="background:#222; color:white; font-weight:bold; padding:8px; border:none; border-radius:5px;" onclick="window.open('${pair.url}', '_blank')">📈 Chart</button>
             </div>
         `;
         grid.appendChild(card);
-        fetchHelius(ca);
+        fetchSecurity(ca);
     });
 }
 
-async function fetchHelius(mint) {
+async function fetchSecurity(mint) {
     const secDiv = document.getElementById(`sec-${mint}`);
     try {
         const response = await fetch(`https://api.helius.xyz/v0/token-metadata?api-key=${HELIUS_API_KEY}`, {
@@ -83,9 +84,9 @@ async function fetchHelius(mint) {
 
         secDiv.innerHTML = `
             <div style="display:flex; justify-content:space-between;">
-                <span>${isMint ? '⚠️ Mint' : '✅ Mint'}</span>
-                <span>${isFreeze ? '⚠️ Freeze' : '✅ Freeze'}</span>
-                ${x ? `<a href="${x}" target="_blank" style="color:#1da1f2; text-decoration:none;">[X]</a>` : ''}
+                <span>Mint: ${isMint ? '⚠️' : '✅'}</span>
+                <span>Freeze: ${isFreeze ? '⚠️' : '✅'}</span>
+                ${x ? `<a href="${x}" target="_blank" style="color:#1da1f2; text-decoration:none; font-weight:bold;">[X]</a>` : '<span style="color:#444">[No X]</span>'}
             </div>
         `;
     } catch (e) { secDiv.innerHTML = "Security: N/A"; }
