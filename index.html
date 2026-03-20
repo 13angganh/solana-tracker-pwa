@@ -142,6 +142,18 @@
             deferredPrompt = null;
         });
 
+        // ----------------------------------------------------------------
+        // Cek update saat app kembali ke foreground
+        // Misal: user buka app dari homescreen, switch app lalu balik
+        // Langsung cek versi baru tanpa tunggu interval 30 detik
+        // ----------------------------------------------------------------
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'visible') {
+                navigator.serviceWorker.getRegistration()
+                    .then(function(reg) { if (reg) reg.update(); });
+            }
+        });
+
     })();
     </script>
 </body>
